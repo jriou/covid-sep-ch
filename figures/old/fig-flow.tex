@@ -1,0 +1,45 @@
+\documentclass{standalone}
+\usepackage{xcolor} 
+\usepackage{tikz} 
+\usetikzlibrary{arrows.meta}
+
+
+
+
+\begin{document}
+\sffamily	
+\definecolor{colpop}{RGB}{179,179,179}
+\definecolor{coltest}{RGB}{95,158,160}
+\definecolor{colpos}{RGB}{102,205,0}
+\definecolor{colhospit}{RGB}{255,165,0}
+\definecolor{coldeath}{RGB}{178,34,34}
+
+
+\begin{tikzpicture}
+	
+	\fill[fill=gray!20,rounded corners] (3.3,1.8) rectangle (16.5,-1.4);
+	\node[gray] at (15.2,1.55) {\textit{{\small Cascade of care}}} ;
+	
+	\node[draw,circle,text width=1.9cm,text centered,fill=colpop] (A) at (0,0) {General population} ;
+	\node[draw,circle,text width=1.9cm,text centered,fill=coltest] (B) at (5,0) {Tested for SARS-CoV-2} ;
+	\node[draw,circle,text width=1.9cm,text centered,fill=colpos] (C) at (10,0) {Positive cases} ;
+	\node[draw,circle,text width=1.9cm,text centered,fill=colhospit] (D) at (15,0) {Hospitalised cases} ;
+	\node[draw,circle,text width=1.9cm,text centered,fill=coldeath] (E) at (15,-3) {Deceased cases} ;
+
+	\draw[->,>=stealth] (A)--(B);
+	\draw[->,>=stealth] (B)--(C);
+	\draw[->,>=stealth] (C)--(D);
+	\draw[->,>=stealth] (C)--(E);
+	\draw[->,>=stealth] (D)--(E);
+	\draw[->,>=stealth,dashed] (B) edge[bend right=25] node[above] {exposure} (A);
+	\draw[->,>=stealth,dashed] (C) edge[bend right=25] node[above] {exposure} (B);
+	\draw[->,>=stealth,dashed] (D) edge[bend right=25] node[above] {exposure} (C);
+	\draw[->,>=stealth,dashed] (E) edge[bend left=17] node[below] {exposure} (A);
+\end{tikzpicture}
+
+	
+
+
+
+
+\end{document}

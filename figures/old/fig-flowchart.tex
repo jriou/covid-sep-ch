@@ -1,0 +1,42 @@
+\documentclass{standalone}
+\usepackage{xcolor} 
+\usepackage{tikz} 
+\usetikzlibrary{arrows.meta}
+
+
+
+
+\begin{document}
+\sffamily	
+\definecolor{colpop}{RGB}{179,179,179}
+\definecolor{coltest}{RGB}{95,158,160}
+\definecolor{colpos}{RGB}{69,139,0}
+\definecolor{colhospit}{RGB}{255,215,0}
+\definecolor{colicu}{RGB}{255,140,0}
+\definecolor{coldeath}{RGB}{178,34,34}
+
+
+\begin{tikzpicture}
+		[
+	Box/.style={rectangle, draw=black!, minimum size=10mm, text width=25mm,text centered,rounded corners},
+	Box2/.style={rectangle, draw=black!, fill=gray!20, minimum size=10mm, text width=20mm,text centered,rounded corners},
+	Round/.style={circle, draw=black!, fill=green!0, minimum size=1mm},
+	]
+	% Nodes
+	\node[Box,fill=colpop] (A) at (5,3) {General population} ;
+	\node[Box,fill=coltest] (B) at (5,0) {Tested for SARS-CoV-2} ;
+	\node[Box,fill=colpos] (C) at (10,0) {Positive cases} ;
+	\node[Box,fill=colhospit] (D) at (15,0) {Hospitalised cases} ;
+	\node[Box,fill=colicu] (E) at (20,0) {ICU admissions} ;
+	\node[Box,fill=coldeath] (F) at (25,0) {Deceased cases} ;
+
+	
+
+\end{tikzpicture}
+
+	
+
+
+
+
+\end{document}

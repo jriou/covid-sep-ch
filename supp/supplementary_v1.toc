@@ -1,0 +1,15 @@
+\contentsline {section}{\numberline {1}Geocoding procedure}{2}{section.1}%
+\contentsline {section}{\numberline {2}Extended methods}{2}{section.2}%
+\contentsline {section}{\numberline {3}Extended results}{3}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Model selection}{3}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Model fit}{4}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Socio-economic position}{5}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Other covariates}{5}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Interaction analysis}{8}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Sensitivity analyses}{10}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Stratification by period}{10}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Excluding geocodes based only on ZIP code}{13}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Excluding geocodes attributed to retirement or nursing homes}{13}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Tables of estimates}{15}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Other covariates}{15}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Interactions}{18}{subsection.5.2}%

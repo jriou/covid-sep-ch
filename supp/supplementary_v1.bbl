@@ -1,0 +1,13 @@
+\begin{thebibliography}{1}
+
+\bibitem{goodrich2020brilleman}
+Goodrich B, Gabry J, Ali I. Brilleman, S. rstanarm: Bayesian Applied Regression
+  Modeling Via Stan. R Package Version 2.21.1; 2020.
+
+\bibitem{vehtari2017practical}
+Vehtari A, Gelman A, Gabry J.
+\newblock Practical Bayesian model evaluation using leave-one-out
+  cross-validation and WAIC.
+\newblock Statistics and computing. 2017;27(5):1413--1432.
+
+\end{thebibliography}
