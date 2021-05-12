@@ -1,9 +1,9 @@
-# system("scp UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_strat8june* post_samples/.")
+# system("scp UBELIX:/storage/homefs/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_strat8june* post_samples/.")
 
-path_strat8june0 = "post_samples/post_samples_strat_covid_sep_strat8june0_2021-02-17.Rdata"
-path_strat8june1 = "post_samples/post_samples_strat_covid_sep_strat8june1_2021-02-18.Rdata"
-path_strat8june0_test23may = "post_samples/post_samples_strat_covid_sep_strat8june0_test23may_2021-02-18.Rdata"
-path_strat8june1_test23may = "post_samples/post_samples_strat_covid_sep_strat8june1_test23may_2021-02-18.Rdata"
+path_strat8june0 = "post_samples/post_samples_strat_covid_sep_strat8june0_2021-04-30.Rdata"
+path_strat8june1 = "post_samples/post_samples_strat_covid_sep_strat8june1_2021-04-30.Rdata"
+path_strat8june0_test23may = "post_samples/post_samples_strat_covid_sep_strat8june0_test23may_2021-04-30.Rdata"
+path_strat8june1_test23may = "post_samples/post_samples_strat_covid_sep_strat8june1_test23may_2021-04-30.Rdata"
 
 
 # Stratified by period

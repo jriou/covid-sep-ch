@@ -90,7 +90,7 @@ g_irr_by_canton =  ggplot(tmp) +
   geom_hline(aes(yintercept=1),linetype=2) +
   facet_grid(denominator ~ outcome) +
   scale_color_manual(values=c("black","purple")) +
-  scale_y_continuous(trans=pseudo_log_trans(),breaks=seq(0,3,by=.2),
+  scale_y_continuous(trans=scales::pseudo_log_trans(),breaks=seq(0,3,by=.2),
                      expand=expansion(c(.1,.1))) +
   scale_x_discrete(limits=rev(levels(tmp$canton))) +
   theme(legend.title.align = .5,

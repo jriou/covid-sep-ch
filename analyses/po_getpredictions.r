@@ -3,12 +3,12 @@
 
 # compute model predictions ----
 
-# system("scp UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_period8june_2021-02-18.Rdata post_samples/.")
-# system("scp UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_period8june_test23may_2021-02-18.Rdata post_samples/.")
+# system("scp UBELIX:/storage/homefs/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_period8june_2021-05-01.Rdata post_samples/.")
+# system("scp UBELIX:/storage/homefs/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_period8june_test23may_2021-05-01.Rdata post_samples/.")
 
 
-path_period8june = "post_samples/post_samples_strat_covid_sep_period8june_2021-02-18.Rdata"
-path_period8june_test23may = "post_samples/post_samples_strat_covid_sep_period8june_test23may_2021-02-18.Rdata"
+path_period8june = "post_samples/post_samples_strat_covid_sep_period8june_2021-05-01.Rdata"
+path_period8june_test23may = "post_samples/post_samples_strat_covid_sep_period8june_test23may_2021-05-01.Rdata"
 
 
 model_names = load(path_period8june) 

@@ -93,7 +93,7 @@ grid.newpage()
 grid.draw(g_est_grob)
 
 
-ggsave( grid.draw(g_est_grob),file="figures/suppfigure_adj_covariates.png",width=25,height=22,units = "cm")
+ggsave( grid.draw(g_est_grob),file="figures/suppfigure_adj_covariates.png",width=25,height=20,units = "cm")
 
 ## Covariates canton figure
 
@@ -160,9 +160,9 @@ tmp_canton = adjusted_model_estimates %>%
   mutate(outcome_name = factor(outcome_name,levels=cascade_outcomes_names),
          denominator_name =factor(denominator_name,levels=cascade_denominators_names,
                                   labels=paste("Per",cascade_denominators_names))) %>%
-  mutate(Sigma=log(RR),
+  mutate(Sigma=log(RR), # transform back to natural scale
          lb=log(lb),
-         ub=log(ub)) %>%
+         ub=log(ub)) %>% 
   dplyr::select(outcome_name,denominator_name,Sigma,lb,ub) %>%
   arrange(outcome_name,denominator_name) 
 
@@ -358,7 +358,7 @@ g_irr_by_canton =  ggplot(tmp_slope_canton) +
   geom_hline(aes(yintercept=1),linetype=2) +
   facet_grid(denominator ~ outcome) +
   scale_color_manual(values=c("black","purple")) +
-  scale_y_continuous(trans=pseudo_log_trans(),breaks=seq(0,3,by=.2),
+  scale_y_continuous(trans=scales::pseudo_log_trans(),breaks=seq(0,3,by=.2),
                      expand=expansion(c(.1,.1))) +
   scale_x_discrete(limits=rev(levels(tmp$canton))) +
   theme(legend.title.align = .5,
@@ -616,7 +616,6 @@ ggsave( file="figures/suppfigure_het_slope_canton.png",width=22,height=8,units =
 
 ## Sensitivity ----
 
-
 tmp_est1 = bind_rows(crude_model_estimates,adjusted_model_estimates) %>%
   mutate(outcome_name = factor(outcome_name,levels=cascade_outcomes_names),
          denominator_name = factor(denominator_name,levels=cascade_denominators_names,labels=paste0("Per ",cascade_denominators_names)),
@@ -639,8 +638,8 @@ tmp_est2 = samples_estimates %>%
   mutate(period=factor(period,levels=c("31 March, 2020 to 4 February, 2021","23 May, 2020 to 4 February, 2021"))) %>%
   mutate(tt="Excluding geocoded from ZIP code only")
 
-tmp_est3 = samples_estimates %>%
-  filter(grepl("nursing",data_type)) %>%
+tmp_est2b = samples_estimates %>%
+  filter(grepl("swisstopo",data_type)) %>%
   filter(par=="ssep_d") %>%
   filter(model_type!="Interactions") %>%
   mutate(outcome_name = factor(outcome_name,levels=cascade_outcomes_names),
@@ -649,25 +648,38 @@ tmp_est3 = samples_estimates %>%
   filter((usetest==1 & grepl("23may",data_type)) | (usetest==0 & !grepl("23may",data_type))) %>%
   mutate(period=if_else(!grepl("23may",data_type),"31 March, 2020 to 4 February, 2021","23 May, 2020 to 4 February, 2021")) %>%
   mutate(period=factor(period,levels=c("31 March, 2020 to 4 February, 2021","23 May, 2020 to 4 February, 2021"))) %>%
-  mutate(tt="Excluding individuals attributed\nto retirement or nursing homes")
+  mutate(tt="Excluding geocoded from Google maps")
 
 
-tmp_est = bind_rows(tmp_est1,tmp_est2,tmp_est3) %>%
-  mutate(model_type=factor(model_type,levels=c("Adjusted","Crude"),labels=c("Adjusted","Unadjusted")))
+
+tmp_est3 = samples_estimates %>%
+  filter(data_type %in% c("strat_covid_sep_period8june_nonursing","strat_covid_sep_period8june_test23may_nonursing")) %>%
+  filter(par=="ssep_d") %>%
+  filter(model_type!="Interactions") %>%
+  mutate(outcome_name = factor(outcome_name,levels=cascade_outcomes_names),
+         denominator_name = factor(denominator_name,levels=cascade_denominators_names,labels=paste0("Per ",cascade_denominators_names)),
+         usetest=if_else(outcome=="n_test"|denominator=="n_test",1,0)) %>%
+  filter((usetest==1 & grepl("23may",data_type)) | (usetest==0 & !grepl("23may",data_type))) %>%
+  mutate(period=if_else(!grepl("23may",data_type),"31 March, 2020 to 4 February, 2021","23 May, 2020 to 4 February, 2021")) %>%
+  mutate(period=factor(period,levels=c("31 March, 2020 to 4 February, 2021","23 May, 2020 to 4 February, 2021"))) %>%
+  mutate(tt="Excluding individuals attributed to nursing homes")
+
+
+tmp_est = bind_rows(tmp_est1,tmp_est2,tmp_est2b,tmp_est3)
 g_est = ggplot(tmp_est) +
   geom_hline(yintercept=1,linetype=2,colour="grey30") +
-  geom_pointrange(aes(x=model_type,y=RR,ymin=lb,ymax=ub,colour=outcome_name,shape=tt),
-                  size=.5,position=position_dodge(-.5)) +
+  geom_pointrange(aes(x=model_type,y=RR,ymin=lb,ymax=ub,fill=outcome_name,colour=outcome_name,shape=tt),
+                  size=.5,position=position_dodge(-.8)) +
   facet_grid(denominator_name ~ outcome_name) +
   scale_y_continuous(expand=expansion(c(0,0))) +
-  # scale_shape_manual(values=c(16,17)) +
+  scale_shape_manual(values=c(16,17,15,1)) +
   scale_colour_manual(values=cascade_outcomes_colours,guide=FALSE) +
+  scale_fill_manual(values=cascade_outcomes_colours,guide=FALSE) +
   # scale_alpha_manual(values=cascade_denominators_alpha,guide=FALSE) + 
   labs(x=NULL,y="Incidence rate ratio per SEP group",shape=NULL) +
   coord_flip(ylim=c(.86,1.08),xlim=c(.6,2.2)) +
   theme(legend.title.align = .5,
-        legend.position = c(0.13,0.12),
-        legend.background = element_blank()) 
+        legend.position = c(0.13,0.12)) 
 g_est
 g_est_grob = ggplotGrob(g_est)
 
@@ -698,14 +710,13 @@ yy = tmp_est %>%
   mutate(irr=firr(RR,lb,ub),
          onetoten=fonetoten(RR,lb,ub)) %>%
   filter(model_type=="Adjusted") %>%
-  select(outcome_name,denominator_name,tt,irr) %>%
+  select(outcome_name,denominator_name,tt,irr) %>% 
   pivot_wider(names_from=tt,values_from=irr) %>%
   arrange(outcome_name,denominator_name) 
 
 yy %>%
 xtable::xtable() %>%
   xtable::print.xtable(include.rownames=FALSE)
-
 
 
 yy = tmp_est %>%

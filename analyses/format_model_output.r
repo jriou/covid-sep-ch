@@ -22,7 +22,7 @@ model_types = c("Crude","Adjusted","Interactions","Interactions")
 
 
 # load data
-data_date = "2021-03-02"
+data_date = "2021-04-30"
 data_path = "data-raw/foph_stratified_data/"
 data_files = c("strat_covid_sep_period8june_",
                "strat_covid_sep_period8june_test23may_",
@@ -30,16 +30,19 @@ data_files = c("strat_covid_sep_period8june_",
                "strat_covid_sep_period26june_",
                "strat_covid_sep_period26june_test23may_",
                "strat_covid_noPLZ_sep_period8june_",
+               "strat_covid_noPLZ_sep_period8june_test23may_",
                "strat_covid_straightgeo_sep_period8june_",
-               "strat_covid_sep_period1sept_",
-               "strat_covid_sep_period1sept_test23may_",
+               "strat_covid_straightgeo_sep_period8june_test23may_",
+               "strat_covid_swisstopo_sep_period8june_",
+               "strat_covid_swisstopo_sep_period8june_test23may_",
                "strat_covid_sep_strat8june0_",
                "strat_covid_sep_strat8june1_",
                "strat_covid_sep_strat8june0_test23may_",
                "strat_covid_sep_strat8june1_test23may_",
                "strat_covid_sep_period8june_nonursing_",
                "strat_covid_sep_period8june_test23may_nonursing_",
-               "strat_covid_noPLZ_sep_period8june_")
+               "strat_covid_sep_period8june_nonursing50_",
+               "strat_covid_sep_period8june_test23may_nonursing50_")
 for(i in 1:length(data_files)) {
   path1 = paste0(data_path,data_files[i],data_date,".rds")
   if(file.exists(path1)) {
@@ -47,27 +50,23 @@ for(i in 1:length(data_files)) {
       mutate(ssep_d_f=relevel(factor(ssep_d),ref="1"),
              age_group_f=relevel(factor(age_group),ref="40-49"),
              canton_f=relevel(factor(canton),ref="ZH"),
-             age_group_f2=recode(age_group_f,`0-9`="0-49",`10-19`="0-49",`20-29`="0-49",`30-39`="0-49",`40-49`="0-49"),
-             n_pos=replace_na(n_pos,0),
-             n_hospit=replace_na(n_hospit,0),
-             n_icu=replace_na(n_icu,0),
-             n_death=replace_na(n_death,0)) %>%
-      filter(!is.na(age_group),!is.na(sex))
+             age_group_f2=recode(age_group_f,`0-9`="0-49",`10-19`="0-49",`20-29`="0-49",`30-39`="0-49",`40-49`="0-49"))
     assign(data_files[i],x)
     rm(x)
   }
 }
 
 # load posterior samples
-samples_date = "2021-03-02"
+samples_date = "2021-05-01"
 samples_path = "analyses/" # samples_path = "post_samples/" 
 samples_files = data_files
 samples_estimates = NULL
 sample_predictions = NULL
 
+# for(i in 1:19) {
 i = as.numeric(args[[1]])
 path1 = paste0(samples_path,"post_samples_",samples_files[i],samples_date,".Rdata")
-if(!file.exists(path1))   path1 = paste0(samples_path,"post_samples_",samples_files[i],as.Date(samples_date)-1,".Rdata")
+if(!file.exists(path1)) path1 = paste0(samples_path,"post_samples_",samples_files[i],as.Date(samples_date)-1,".Rdata")
 model_names = load(path1) 
 model_names = model_names[grep("m_test|m_pos|m_hospit|m_icu|m_death",model_names)]
 # assign(paste0("S_",samples_files[i]),mget(model_names))
@@ -88,7 +87,7 @@ for(j in 1:length(model_names)) {
   # extract data
   r_data = get(model_names[j])$data
   # extract looic
-  # r_loo = loo(get(model_names[j]))
+  r_loo = loo(get(model_names[j]))
   # extract parameter estimates
   r_estimates = tbl_summary(get(model_names[j])) %>%
     mutate(model_name = model_names[j],
@@ -98,10 +97,9 @@ for(j in 1:length(model_names)) {
            denominator_name = cascade_denominators_names[m_denominator],
            model_type = model_types[m_type],
            data_type = samples_files[i],
-           looic = NA,looic_se=NA)
-           
-           # looic = r_loo$estimates[3,1],
-           # looic_se = r_loo$estimates[3,2])
+           # looic = NA,looic_se=NA)
+           looic = r_loo$estimates[3,1],
+           looic_se = r_loo$estimates[3,2])
   # extract predictions
   # ofs = r_data[,cascade_denominators[m_denominator]]
   # r_pred = posterior_predict(get(model_names[j]),

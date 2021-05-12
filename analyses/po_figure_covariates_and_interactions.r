@@ -110,6 +110,20 @@ g_B = ll_interactions_slopes %>%
   coord_flip(xlim=c(5.75,.75),ylim=c(.74,1.05))
 g_B
 
+
+rawdata_fig4b_perpop = ll_interactions_slopes %>%
+  filter((outcome=="n_death" & denominator=="n_pop")) %>%
+  filter(age_group %in% c("40-49","50-59","60-69","70-79","80+")) %>%
+  mutate(outcome_name = factor(outcome,levels=cascade_outcomes,labels=cascade_outcomes_names),
+         denominator_name = factor(denominator,levels=cascade_denominators,labels=paste0("per ",cascade_denominators_names)),
+         sex=factor(sex,levels=c("Males","Females")),
+         period=factor(period,levels=c("Before 8 June","After 8 June"),labels=c("1st wave","2nd wave")),
+         strip=paste(outcome_name,denominator_name),
+         age_group=factor(age_group,levels=c("40-49","50-59","60-69","70-79","80+"),labels=c("0-49","50-59","60-69","70-79","80+")),
+         age_group2=as.numeric(age_group)+ifelse(period=="1st wave",-0.15,0.15)+ifelse(sex=="Males",-0.075,0.075)) 
+
+write.csv(rawdata_fig4b_perpop,file="data-raw/data_fig4B_perpop.csv")
+
 # panel C: variability by canton
 source("analyses/po_irr_by_canton.r")
 
@@ -165,8 +179,8 @@ g_D
 
 # put together ----
 
-  cowplot::plot_grid(g_A,g_B,#g_C,g_D,
-                   ncol=2,labels=c("A","B","C","D"),align="hv",
+cowplot::plot_grid(g_A,g_B,
+                   ncol=2,labels=c("A","B"),align="hv",
                    rel_widths=c(1.4,1))
 
 ggsave( file="figures/figure4.png",width=18,height=12,units = "cm")

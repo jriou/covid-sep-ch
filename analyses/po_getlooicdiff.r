@@ -1,5 +1,5 @@
-path_period8june = "post_samples/post_samples_strat_covid_sep_period8june_2021-02-18.Rdata"
-path_period8june_test23may = "post_samples/post_samples_strat_covid_sep_period8june_test23may_2021-02-18.Rdata"
+path_period8june = "post_samples/post_samples_strat_covid_sep_period8june_2021-05-01.Rdata"
+path_period8june_test23may = "post_samples/post_samples_strat_covid_sep_period8june_test23may_2021-05-01.Rdata"
 
 
 model_names = load(path_period8june) 
@@ -77,4 +77,4 @@ for(i in 1:length(list_models)) {
   cat(i,"--------------\n")
 }
 
-saveRDS(model_looicdiff,file="post_samples/looicdiff_2021-02-18.rds")
+saveRDS(model_looicdiff,file="post_samples/looicdiff_2021-05-01.rds")

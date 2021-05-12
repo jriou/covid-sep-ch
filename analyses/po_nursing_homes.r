@@ -48,97 +48,15 @@ grid.draw(g_est_grob)
 ggsave(plot = grid.draw(g_est_grob),file="figures/suppfigure_nonursing.png",width=22,height=11,units = "cm")
 
 
+posneg_geo_all %>% 
+  group_by(excl_somed25) %>%
+  summarise_frq()
 
-# system("scp UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_period8june_nonursing_2021-03-02.Rdata post_samples/.")
-# system("scp UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/post_samples_strat_covid_sep_period8june_test23may_nonursing_2021-03-02.Rdata post_samples/.")
+posneg_geo_all %>% 
+  mutate(period=if_else(date<date_period,1,2)) %>%
+  group_by(period,excl_somed25) %>%
+  summarise_frq()
 
-
-path_period8june_nonursing = "post_samples/post_samples_strat_covid_sep_period8june_nonursing_2021-03-02.Rdata"
-path_period8june_test23may_nonursing = "post_samples/post_samples_strat_covid_sep_period8june_test23may_nonursing_2021-03-02.Rdata"
-ll_interactions_slopes = NULL
-
-l=load(path_period8june_nonursing)
-
-ll_interactions_slopes = get_interaction_slope(m_pos_pop_3,"n_pos","n_pop",c("Before 8 June","After 8 June")) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_hospit_pop_3,"n_hospit","n_pop",c("Before 8 June","After 8 June")) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_icu_pop_3,"n_icu","n_pop",c("Before 8 June","After 8 June"),ref4049=FALSE) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_death_pop_3,"n_death","n_pop",c("Before 8 June","After 8 June"),ref4049=FALSE) %>% 
-  bind_rows(ll_interactions_slopes)
-
-ll_interactions_slopes = get_interaction_slope(m_hospit_pos_3,"n_hospit","n_pos",c("Before 8 June","After 8 June")) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_icu_pos_3,"n_icu","n_pos",c("Before 8 June","After 8 June"),ref4049=FALSE) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_death_pos_3,"n_death","n_pos",c("Before 8 June","After 8 June"),ref4049=FALSE) %>% 
-  bind_rows(ll_interactions_slopes)
-
-
-l=load(path_period8june_test23may_nonursing)
-
-
-ll_interactions_slopes = get_interaction_slope(m_test_pop_3,"n_test","n_pop",c("Before 8 June","After 8 June")) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_pos_test_3,"n_pos","n_test",c("Before 8 June","After 8 June")) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_hospit_test_3,"n_hospit","n_test",c("Before 8 June","After 8 June")) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_icu_test_3,"n_icu","n_test",c("Before 8 June","After 8 June"),ref4049=FALSE) %>% 
-  bind_rows(ll_interactions_slopes)
-ll_interactions_slopes = get_interaction_slope(m_death_test_3,"n_death","n_test",c("Before 8 June","After 8 June"),ref4049=FALSE) %>% 
-  bind_rows(ll_interactions_slopes)
-
-
- 
-
-ll_interactions_slopes %>%
-  filter((outcome=="n_test" & denominator=="n_pop") |
-           (outcome=="n_pos" & denominator=="n_test") |
-           (outcome=="n_hospit" & denominator=="n_pos") |
-           (outcome=="n_icu" & denominator=="n_pos") |
-           (outcome=="n_death" & denominator=="n_pos")) %>%
-  mutate(outcome_name = factor(outcome,levels=cascade_outcomes,labels=cascade_outcomes_names),
-         denominator_name = factor(denominator,levels=cascade_denominators,labels=cascade_denominators_names),
-         sex=factor(sex,levels=c("Males","Females")),
-         period=factor(period,levels=c("Before 8 June","After 8 June")),
-         age_group=factor(age_group),
-         age_group2=as.numeric(age_group)+ifelse(sex=="Males",-0.2,0.2)) %>%
-  ggplot() +
-  geom_hline(yintercept=1,linetype=2) +
-  geom_line(aes(x=age_group2,y=`50%`,colour=sex,alpha=period, linetype=period, group=interaction(sex,period))) +
-  geom_pointrange(aes(x=age_group2,y=`50%`,ymin=`2.5%`,ymax=`97.5%`,colour=sex,shape=period,alpha=period),size=.2,fill="white") +
-  # geom_point(aes(x=age_group2,y=`50%`,colour=sex,shape=period,alpha=period),fill="white") +
-  facet_wrap(~ outcome_name + denominator_name ,ncol=5) +
-  scale_alpha_manual(values=c(1,.8)) +
-  scale_shape_manual(values=c(19,21)) +
-  scale_x_continuous(breaks=1:9,labels=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+")) +
-  labs(x=NULL,y="IRR per SEP group",colour="Sex:",
-       linetype="Epidemic wave:",shape="Epidemic wave:",alpha="Epidemic wave:") +
-  theme(axis.text.x=element_text(angle=45,hjust=1),
-        legend.title.align = .5)
-
-
-ll_interactions_slopes %>%
-  filter(denominator=="n_pop") %>%
-  mutate(outcome_name = factor(outcome,levels=cascade_outcomes,labels=cascade_outcomes_names),
-         denominator_name = factor(denominator,levels=cascade_denominators,labels=cascade_denominators_names),
-         sex=factor(sex,levels=c("Males","Females")),
-         period=factor(period,levels=c("Before 8 June","After 8 June")),
-         age_group=factor(age_group),
-         age_group2=as.numeric(age_group)+ifelse(sex=="Males",-0.2,0.2)) %>%
-  ggplot() +
-  geom_hline(yintercept=1,linetype=2) +
-  geom_line(aes(x=age_group2,y=`50%`,colour=sex,alpha=period, linetype=period, group=interaction(sex,period))) +
-  geom_pointrange(aes(x=age_group2,y=`50%`,ymin=`2.5%`,ymax=`97.5%`,colour=sex,shape=period,alpha=period),size=.2,fill="white") +
-  # geom_point(aes(x=age_group2,y=`50%`,colour=sex,shape=period,alpha=period),fill="white") +
-  facet_wrap(~ outcome_name + denominator_name ,ncol=5) +
-  scale_alpha_manual(values=c(1,.8)) +
-  scale_shape_manual(values=c(19,21)) +
-  scale_x_continuous(breaks=1:9,labels=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+")) +
-  labs(x=NULL,y="IRR per SEP group",colour="Sex:",
-       linetype="Epidemic wave:",shape="Epidemic wave:",alpha="Epidemic wave:") +
-  theme(axis.text.x=element_text(angle=45,hjust=1),
-        legend.title.align = .5)
- 
+posneg_geo_all %>% 
+  group_by(excl_somed50) %>%
+  summarise_frq()
