@@ -183,6 +183,6 @@ cowplot::plot_grid(g_A,g_B,
                    ncol=2,labels=c("A","B"),align="hv",
                    rel_widths=c(1.4,1))
 
-ggsave( file="figures/figure4.png",width=18,height=12,units = "cm")
+ggsave( file="figures/figure4.pdf",width=18,height=12,units = "cm")
 
 

@@ -112,7 +112,7 @@ for (i in idx) g_data_grob$grobs[[i]] <- nullGrob()
 grid.newpage()
 grid.draw(g_data_grob)
 
-ggsave( grid.draw(g_data_grob),file="figures/figure2_choice2.png",width=25,height=16,units = "cm")
+ggsave( grid.draw(g_data_grob),file="figures/figure2_choice2.pdf",width=25,height=16,units = "cm")
 
 
 

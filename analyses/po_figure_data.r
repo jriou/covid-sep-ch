@@ -22,4 +22,4 @@ strat_covid_sep_week %>%
 
 
 ## save
-ggsave(file="figures/figure1.png",width=18,height=8,units = "cm")
+ggsave(file="figures/figure1.pdf",width=18,height=8,units = "cm")

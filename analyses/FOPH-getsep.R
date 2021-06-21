@@ -3,28 +3,40 @@
 #' author: "Radoslaw Panczak, Julien Riou" 
 #' date: "`r Sys.Date()`"
 #' output:  html_document
-#' self_contained: no
+#' self_contained: yes
 #' ---
 
 # rmarkdown::render("analyses/FOPH-getsep.R",clean=FALSE)
 
 #' # Set-up
 #' 
-#' ## Libraries
+#' ## Libraries 
+#' 
+
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+
 library(pacman) 
 p_load(tidyverse, magrittr, scales, lubridate, 
-       kableExtra, sjmisc, sjPlot,
-       sf, tmap, tmaptools,gtsummary)
+       kableExtra, sjmisc, sjPlot, gtsummary, naniar, 
+       sf)#, tmap, tmaptools)
 
-final_date = as.Date("2021-02-04")
-filter_com = function(x,y) ifelse(y==1,x,NA)
-filter_bad_dates = function(x,lim1="2020-02-01",lim2=final_date) if_else(x<as.Date(lim1)|x>as.Date(lim2),ymd(NA),ymd(x))
-filter_bounding_box_x = function(x) if_else(x<6.02260949059|x>10.4427014502,as.numeric(NA),x)
-filter_bounding_box_y = function(y) if_else(y<45.7769477403|y>47.8308275417,as.numeric(NA),y)
+#' ## Set-up
+#' 
+
+date_start = as.Date("2020-03-01")
+date_end = as.Date("2021-04-16")
+date_negtest = as.Date("2020-05-23")
+date_period = as.Date("2020-06-08")
+
+#' ## Functions 
+#' 
+
+filter_bad_dates = function(x,lim1="2020-02-01",lim2=date_end) if_else(x<as.Date(lim1)|x>as.Date(lim2),ymd(NA),ymd(x))
+
 summarise_frq = function(x) {
   x %>%
-    summarise(n_test=n(),
-              n_pos=sum(test_pos),
+    summarise(n_test=sum(test,na.rm=TRUE),  # only takes into account tests from 23 may 2020
+              n_pos=sum(test_pos, na.rm = TRUE),
               n_hospit=sum(hospitalisation),
               n_icu=sum(icu),
               n_death=sum(death)) %>%
@@ -36,21 +48,29 @@ summarise_frq = function(x) {
 }  
 
 #' ## Load data and data-management
-
-pos = readRDS("../in_sensitive/geocoded_ncov2019_sp_positives_20210204.rds") %>%
+#' 
+#' ## Positive tests
+#' 
+pos = readRDS("in_sensitive/geocoded_ncov2019_sp_positives_20210416.rds") %>%
+  arrange(fall_id) %>% 
   as_tibble() %>%
   mutate_if(is.factor,as.character) %>% 
-  # mutate_if(is.character,trimws("b")) %>%
+  mutate_if(is.character,str_trim) %>%
   mutate(test_pos=1,
          plz_pat=as.character(plz_pat),
          plz_pat=ifelse(plz_pat=="0",NA,plz_pat),
          plz_pat=ifelse(plz_pat=="",NA,plz_pat),
+         plz_pat=ifelse(plz_pat=="",NA,plz_pat),
+         plz_pat=ifelse(plz_pat=="0",NA,plz_pat),
+         plz_pat=str_replace(patient_plz,fixed("CH-"), ""), 
+         plz_pat=ifelse(str_length(plz_pat)>4,NA,plz_pat),
+         plz_pat=ifelse(between(as.numeric(plz_pat),1000,9699),plz_pat,NA),
          strasse_pat=ifelse(strasse_pat=="",NA,strasse_pat),
          ort_lang_pat=ifelse(ort_lang_pat=="",NA,ort_lang_pat),
          age_group = cut(altersjahr, 
                          breaks=c(seq(0,80,10),120),right=FALSE, 
                          labels=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+"))) %>%
-  select(
+  dplyr::select(
     test_pos,
     replikation_dt,fall_guid,fall_id, # identifiers
     strasse_pat, # address
@@ -63,58 +83,85 @@ pos = readRDS("../in_sensitive/geocoded_ncov2019_sp_positives_20210204.rds") %>%
     fall_dt,entnahme_dt,test_dt, # dates
     X,Y # location
   ) %>%
-  filter(canton!="FL",!is.na(canton),land=="Schweiz") %>%
   mutate_if(is.Date,filter_bad_dates) %>%
-  mutate(X=filter_bounding_box_x(X),
-         Y=filter_bounding_box_y(Y)) %>%
-  mutate_if(is.Date,filter_bad_dates) %>%
-  mutate(date=coalesce(entnahme_dt,test_dt),date=coalesce(date,fall_dt),month=month(date)) %>%
-  filter(date<=final_date)
+  mutate(date=coalesce(entnahme_dt,test_dt),date=coalesce(date,fall_dt))
 
-neg = readRDS("../in_sensitive/geocoded_ncov2019_sp_negatives_20210204.rds") %>%
+# dim(pos[duplicated(pos$fall_guid),])[1]
+
+frq(pos, land, sort.frq = "desc")
+frq(pos, canton, sort.frq = "desc")
+frq(pos, geo.status)
+frq(pos, is.na(plz_pat))
+summary(pos$date)
+gg_miss_var(pos, show_pct = TRUE)
+
+#' 
+#' ## Negative tests
+#' 
+
+neg = readRDS("in_sensitive/geocoded_ncov2019_sp_negatives_20210416.rds") %>%
   as_tibble() %>%
   mutate_if(is.factor,as.character) %>%
+  mutate_if(is.character,str_trim) %>%
   mutate(test_pos=0,
          age=2020-patient_geb_jahr,
          patient_strasse=ifelse(patient_strasse=="",NA,patient_strasse),
          patient_plz=ifelse(patient_plz=="",NA,patient_plz),
          patient_plz=ifelse(patient_plz=="0",NA,patient_plz),
+         patient_plz=str_replace(patient_plz,fixed("CH-"),""), 
+         patient_plz=ifelse(str_length(patient_plz)>4,NA,patient_plz),
+         patient_plz=ifelse(between(as.numeric(patient_plz),1000,9699),patient_plz,NA),
          patient_ort=ifelse(patient_ort=="",NA,patient_ort),
          patient_sex=na_if(patient_sex,3),
          patient_sex=na_if(patient_sex,9),
          age_group = cut(age, 
                          breaks=c(seq(0,80,10),120),right=FALSE, 
                          labels=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+")),
-         patient_kanton=ifelse(patient_kanton %in% c("?"," ","","CH","D","IT","AUSL","CD","IN","TH","TR",
-                                                    "DE","Nordma","Baden W<fc>rtemberg",
-                                                    "France","LZ","EUR","..","A","N/A",
-                                                    "Niedersachsen","CA","ON","F","BY",
-                                                    "5","8","AUS","RP","GB","MV","I",
-                                                    "MI","MA","BW","Baden Würtemberg","AT",
-                                                    "T","ain","BER","Na","ARA","12","3",
-                                                    "egypte","doubs","NI","20","BB","Ain",
-                                                    "ST","NY","haute savoie","Allemagne",
-                                                    "Italy","VR","france","HH","HE",
-                                                    "NR","SL","SN","San Jo","14","HK","FI",
-                                                    "inconnu","INCONNU","Inconnu","48","dispo",
-                                                    "EN","pas dispo","AE"),
-                                NA,patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("Schwyz","Sz","sz"),"SZ",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("Z<fc>rich","Zh","zh","Zürich","zürich","ZU"),"ZH",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("Thurga","thurga","tg"),"TG",patient_kanton),
-         patient_kanton=ifelse(patient_kanton %in% c("VA","Vaud","vaud","vd","Vd"),"VD",patient_kanton),
+         patient_kanton=ifelse(patient_kanton %in% c("VA","Vaud","vaud","vd","Vd","¨VD"),"VD",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("geneve"),"GE",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("valais","vs"),"VS",patient_kanton),
+         patient_kanton=ifelse(patient_kanton %in% c("Lu","Luzern"),"LU",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("Gr"),"GR",patient_kanton),
-         patient_kanton=ifelse(patient_kanton %in% c("Fribourg","fribourg","fr"),"FR",patient_kanton),
+         patient_kanton=ifelse(patient_kanton %in% c("Fribourg","fribourg","fr","Fr","FR."),"FR",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("neuchatel","ne"),"NE",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("Ag"),"AG",patient_kanton),
-         patient_kanton=ifelse(patient_kanton %in% c("Ur"),"UR",patient_kanton),
+         patient_kanton=ifelse(patient_kanton %in% c("Ur","URI"),"UR",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("nv"),"NW",patient_kanton),
+         patient_kanton=ifelse(patient_kanton %in% c("Zg"),"ZG",patient_kanton),
          patient_kanton=ifelse(patient_kanton %in% c("Be"),"BE",patient_kanton),
-         patient_land=ifelse(patient_land %in% c("CH","Ch","ch","Schweiz","SUI","CHE",
-                                                  "SCH","CH1","CCH"),"Schweiz",patient_land)) %>%
-  select(
+         patient_kanton=ifelse(!(patient_kanton %in% c("AG","AI","AR","BE","BL","BS","FL","FR",
+                                                       "GE","GL","GR","JU","LU","NE","NW","OW",
+                                                       "SG","SH","SO","SZ","TI","TG","UR","VD",
+                                                       "VS","ZG","ZH")),NA,patient_kanton),
+         
+         patient_land=ifelse(patient_land %in% c("CH","Ch","ch","Schweiz","SUI","Switzerland","SW","SV","SWZ","CH.",
+                                                 "SCH","CH1","CCH","Schweizer","Sui","Suisse"),
+                             "Schweiz",patient_land),
+         patient_land=ifelse(patient_land %in% c("","..","0","XX",".","INCONNU","...","85",
+                                                 "??","?","#N/A", "ZZZ",">$PAT_LAND", "00",
+                                                 "021","649","674","765111940","Z1", "ANDERES"),
+                             NA,patient_land),
+         patient_land=ifelse(str_sub(patient_land, 1, 3) == "+41",
+                             NA,patient_land),
+         patient_strasse=ifelse(patient_strasse %in% c("-","--","..","."),
+                                NA,patient_strasse),
+         patient_ort=ifelse(patient_ort %in% c("Unbekannt","--","DE PASSAGE","-",
+                                               "Park City","0","AUSLAND","----",
+                                               "Abu Dhabi","Al Ain","Bogota",
+                                               "MILANO","Medellin","Moskau","#N/A",
+                                               ".","050004 MEDELLIN","75010",
+                                               "Alger","Almaty","BARCELONA","BEGUR",
+                                               "Buenos Aires","CALI","Cocquio Trevisago",
+                                               "COMO","Dublin","Envigado","Gura Humorului",
+                                               "Liban","MONACO","Paris; France","RUSSIE",
+                                               "Slowakei","St Claude","STUTTGART","Trebes",
+                                               "Usaquen Bogota"),
+                                               NA,patient_ort)
+  ) %>%
+  dplyr::select(
     test_pos,
     replikation_dt,labor_test_negativ,meldeeinheit_code, # identifiers
     strasse_pat=patient_strasse, # address
@@ -128,26 +175,79 @@ neg = readRDS("../in_sensitive/geocoded_ncov2019_sp_negatives_20210204.rds") %>%
     test_dt=test_test_dt, # dates
     X,Y # location
   ) %>%
-  filter(canton !="FL",!is.na(canton),land=="Schweiz") %>%
   mutate_if(is.Date,filter_bad_dates) %>%
-  mutate(X=filter_bounding_box_x(X),
-         Y=filter_bounding_box_y(Y)) %>%
-  mutate(date=coalesce(entnahme_dt,test_dt),month=month(date)) %>%
-  filter(date<=final_date)
+  mutate(date=coalesce(entnahme_dt,test_dt))
 
+
+mis_canton <- neg %>% 
+  filter(is.na(canton) & !is.na(X)) %>% 
+  # dplyr::select(ID, X, Y) %>%
+  st_as_sf(coords = c("X", "Y"), remove = TRUE, crs = 4326, agr = "identity") %>%
+  st_transform(crs = 2056) 
+
+canton_2020_01 <- read_rds("data-raw/swissBOUNDARIES3D/canton_2020_01.Rds") %>% 
+  select(-KT_TEIL)
+
+mis_canton <- st_join(mis_canton, canton_2020_01, join = st_intersects) %>% 
+  st_drop_geometry() %>% 
+  mutate(
+    canton = case_when(
+      NAME == "Aargau" ~ "AG", 
+      NAME == "Appenzell Ausserrhoden" ~ "AR", 
+      NAME == "Appenzell Innerrhoden" ~ "AI", 
+      NAME == "Basel-Landschaft" ~ "BL", 
+      NAME == "Basel-Stadt" ~ "BS", 
+      NAME == "Bern" ~ "BE", 
+      NAME == "Fribourg" ~ "FR", 
+      NAME == "Genève" ~ "GE", 
+      NAME == "Glarus" ~ "GL", 
+      NAME == "Graubünden" ~ "GR", 
+      NAME == "Jura" ~ "JU", 
+      NAME == "Luzern" ~ "LU", 
+      NAME == "Neuchâtel" ~ "NE", 
+      NAME == "Nidwalden" ~ "NW", 
+      NAME == "Obwalden" ~ "OW", 
+      NAME == "Schaffhausen" ~ "SH", 
+      NAME == "Schwyz" ~ "SZ", 
+      NAME == "Solothurn" ~ "SO", 
+      NAME == "St. Gallen" ~ "SG", 
+      NAME == "Thurgau" ~ "TG", 
+      NAME == "Ticino" ~ "TI", 
+      NAME == "Uri" ~ "UR", 
+      NAME == "Valais" ~ "VS", 
+      NAME == "Vaud" ~ "VD", 
+      NAME == "Zug" ~ "ZG", 
+      NAME == "Zürich" ~ "ZH"
+    ))
+
+neg = neg %>% 
+  filter(!(is.na(canton) & !is.na(X))) %>%
+  bind_rows(mis_canton)
+
+dim(neg[duplicated(neg$labor_test_negativ),])[1]
+
+frq(neg, land, sort.frq = "desc")
+frq(neg, canton, sort.frq = "desc")
+frq(neg, geo.status)
+frq(neg, is.na(neg$plz_pat))
+summary(neg$date)
+gg_miss_var(neg, show_pct = TRUE)
 
 #' # Merge with full data
 #' 
 #' Additional information about positive cases is available in the main data set,
 #' eg sex, hospitalisation, death and comorbidities. All information available
 #' on negative tests is already in the `neg` table, so no additional merging is
-#' necessary.
-#' 
+#' necessary. We also use information on age and combined date to fill up `NA`s in
+#' `pos` file.
 
-allpos = readRDS("../in_sensitive/ncov2019_falldetail_cases-2021-02-05_08-03-01.rds") %>%  
+allpos = readRDS("in_sensitive/ncov2019_falldetail_cases-2021-04-16_07-59-15.rds") %>%  
   as_tibble() %>%
   mutate_if(is.factor,as.character) %>%
+  mutate_if(is.character,str_trim) %>%
   dplyr::select(fall_guid,
+                altersjahr, 
+                date_allpos=fall_dt, 
                 symptom_onset_date=manifestation_dt_kb_merged,
                 isolation_date=isoliert_beginn_kb_merged,
                 sex,
@@ -157,65 +257,317 @@ allpos = readRDS("../in_sensitive/ncov2019_falldetail_cases-2021-02-05_08-03-01.
                 death=tod_em,
                 death_dt=tod_dt_em) %>%
   mutate_if(is.Date,filter_bad_dates) %>%
-  mutate(sex=recode(sex,"Männlich"=1,"Weiblich"=2),
+  mutate(sex=case_when(sex=="Männlich" ~ 1,
+                       sex=="Weiblich" ~ 2,
+                       sex=="Unbekannt" ~ as.numeric(NA)),
          hospitalisation=if_else(hospitalisation==1,1,0,missing=0),
          icu=if_else(icu==1,1,0,missing=0),
-         death=if_else(death==1,1,0,missing=0)
-         ) 
+         death=if_else(death==1,1,0,missing=0),
+         allpos = 1,
+         age_group_allpos = cut(altersjahr, 
+                                breaks=c(seq(0,80,10),120),right=FALSE, 
+                                labels=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+"))) %>% 
+dplyr::select(-altersjahr)
 
-pos = left_join(pos,allpos,by="fall_guid") %>%
-  mutate(hospitalisation=if_else(hospitalisation==1,1,0,missing=0),
+summary(allpos$date_allpos)
+
+dim(allpos[duplicated(allpos$fall_guid),])[1]
+
+nrow(pos) - nrow(allpos)
+
+# keeping all pos 
+nrow(left_join(pos,allpos,by="fall_guid"))
+# only overlap
+nrow(semi_join(pos,allpos,by="fall_guid"))
+# in either of the sources
+nrow(full_join(pos,allpos,by="fall_guid"))
+# pos without match in allpos
+nrow(anti_join(pos,allpos,by="fall_guid"))
+
+pos_merge = pos %>% 
+  full_join(allpos,by="fall_guid") %>%
+  mutate(test=if_else(date>=date_negtest,1,0,missing=0),
+         hospitalisation=if_else(hospitalisation==1,1,0,missing=0),
          icu=if_else(icu==1,1,0,missing=0),
-         death=if_else(death==1,1,0,missing=0))
+         death=if_else(death==1,1,0,missing=0)) %>% 
+  mutate(date_pos = date) %>% 
+  mutate(date = ifelse(is.na(date_pos) & !is.na(date_allpos), date_allpos, date_pos)) %>% 
+  relocate(date, date_pos, date_allpos, .after = fall_id) 
 
+pos_merge$date <- zoo::as.Date(pos_merge$date)
+pos_merge$age_group <- factor(pos_merge$age_group, 
+                              labels=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+"))
 
-pos_neg = bind_rows(pos,neg) %>%
-  mutate(hospitalisation=if_else(hospitalisation==1,1,0,missing=0),
+# non overlaping parts
+frq(pos_merge$allpos)
+frq(pos_merge$test_pos)
+
+# rescued dates
+table(is.na(pos$date))
+table(is.na(pos_merge$date))
+
+pos_neg = bind_rows(pos_merge,neg) %>%
+  mutate(test=if_else(date>=date_negtest,1,0,missing=0),
+         hospitalisation=if_else(hospitalisation==1,1,0,missing=0),
          icu=if_else(icu==1,1,0,missing=0),
-         death=if_else(death==1,1,0,missing=0))
+         death=if_else(death==1,1,0,missing=0)) %>% 
+  mutate(month=month(date),
+         ) %>% 
+  relocate(month, .after = date) %>% 
+  dplyr::select(-date_pos, -date_allpos)
 
-#' ## Extra checks 
-#' ### Foreign exclusions?
+pos_neg %<>%
+  mutate(ID = row_number()) %>%
+  relocate(ID)
+
+saveRDS(pos_neg, "in_sensitive/pos_neg.rds")
+
+#' ## Exclusions 
 #' 
-excl1 =  readRDS("../in_sensitive/geocoded_ncov2019_sp_positives_20210204.rds") %>% 
-  filter(ktn_fall == "FL" | is.na(ktn_fall) | wland_fall != "Schweiz")
+#' ### Start
 
-nrow(excl1)
-
-#' ### Overlay?
-#' Could replace `filter_bounding_box_y` above in slightly more precise way?
-# 
-# excl2 =  pos_neg %>%
-#   filter(!is.na(X),!is.na(Y)) %>% 
-#   st_as_sf(coords = c("X", "Y"), remove = FALSE, crs = 4326, agr = "identity") %>% 
-#   st_transform(crs = 2056)
-# 
-# outline = sf::st_read("../data-raw/ag-b-00.03-875-gg18/ggg_2018-LV95/shp/g1l18.shp") 
-# 
-# excl2_geo = st_join(excl2, outline, join = st_difference)
-# 
-# plot(sf::st_geometry(outline))
-# plot(sf::st_geometry(excl2_geo),add=TRUE)
-
-
-#' # Describe initial database
-
-
-pos_neg %>%
-  summarise_frq()
+summarise_frq(pos_neg)
 
 pos_neg %>%
   group_by(age_group) %>%
   summarise_frq()
 
-pos_neg %>%
+summary(pos_neg$date)
+
+pos_neg %>% filter(date>date_end) %>% nrow()
+
+start <- nrow(pos_neg)
+
+gg_miss_var(pos_neg, show_pct = TRUE)
+
+#' ### No link to pos
+
+pos_neg %>% filter(is.na(test_pos)) %>% summarise_frq()
+
+pos_neg_fin <- pos_neg %>% 
+  filter(!is.na(test_pos))
+
+#' ### Age & sex
+
+pos_neg_fin %>% filter(is.na(sex) | is.na(age_group)) %>% summarise_frq()
+
+pos_neg_fin %<>% 
+  filter(!is.na(sex)) %>% 
+  filter(!is.na(age_group))
+
+#' ### Date missing
+
+summary(pos_neg_fin$date)
+
+pos_neg_fin %>% filter(is.na(date)) %>% summarise_frq()
+
+pos_neg_fin %<>% 
+  filter(!is.na(date))
+
+#' ### Date before 1 march
+
+pos_neg_fin %>% filter(date<date_start) %>% summarise_frq()
+
+pos_neg_fin %<>% 
+  filter(date>=date_start)
+
+#' ### Date before 23 may for negative tests
+
+pos_neg_fin %>% filter((test_pos==0 & date<date_negtest)) %>% summarise_frq()
+
+pos_neg_fin %<>% 
+  filter(!(test_pos==0 & date<date_negtest))
+
+
+
+#' ### Geography
+#' 
+#' Missing canton
+
+pos_neg_fin %>%
+  group_by(is.na(canton)) %>%
+  summarise_frq()
+
+pos_neg_fin %<>% 
+  filter(!is.na(canton))
+
+#' #### FL
+#' Excluded by both canton and PLZ
+
+pos_neg_fin %>% filter(canton == "FL" | land == "FL" | between(as.numeric(plz_pat), 9485, 9499)) %>% summarise_frq()
+
+pos_neg_fin %<>% 
+  mutate(drop = ifelse(canton == "FL" | land == "FL" | between(as.numeric(plz_pat), 9485, 9499),
+                       1, 0)) %>% 
+  filter(drop != 1 | is.na(drop)) %>% 
+  select(-drop)
+
+#' #### Missing coordinates
+
+pos_neg_fin %>% filter(is.na(X) | is.na(Y)) %>% summarise_frq()
+pos_neg_fin %>% filter(is.na(X) | is.na(Y)) %>% frq(geo.status)
+
+pos_neg_fin %<>% 
+  filter(!is.na(X)) %>% 
+  filter(!is.na(Y)) 
+
+pos_neg_fin %>% 
+  dplyr::select(ID, X, Y) %>%
+  write_csv("in_sensitive/pos_neg_fin.csv")
+
+pos_neg_fin %>% 
+  dplyr::select(ID, X, Y) %>%
+  st_as_sf(coords = c("X", "Y"), remove = FALSE, crs = 4326, agr = "identity") %>%
+  st_transform(crs = 2056) %>% 
+  st_write("in_sensitive/pos_neg_fin.gpkg", delete_dsn = TRUE)
+
+#' #### Google results
+#' !!! These are results with swisstopo results `Fehler bei API Call` or `kein Resultat`
+#' but they contain coordinates; they must come from somewhere else
+
+frq(pos_neg_fin$geo.status)
+
+pos_neg_fin %>% 
+  summarise_frq()
+
+pos_neg_fin %>% 
+  filter(geo.status == "Fehler bei API Call" | geo.status == "kein Resultat") %>% 
+  summarise_frq()
+
+pos_neg_fin %>% 
+  filter(geo.status == "OK" | geo.status == "mehrere Resultate, nehme id=1") %>% 
+  summarise_frq()
+
+saveRDS(pos_neg_fin, "in_sensitive/pos_neg_fin.rds")
+
+# # comment out to use full results including Google
+# pos_neg_fin %<>%
+#   filter(geo.status == "OK" | geo.status == "mehrere Resultate, nehme id=1")
+
+#' #### Overlay
+#' Complements `filter_bounding_box_y` above 
+
+pos_neg_fin_pt =  pos_neg_fin %>%
+  select(ID, X, Y) %>% 
+  st_as_sf(coords = c("X", "Y"), remove = TRUE, crs = 4326, agr = "identity") %>%
+  st_transform(crs = 2056)
+
+# temp_pt <- pos_neg_fin_pt %>%
+#   sample_n(100000)
+
+# with 100m buffer to capture border addresses better
+outline = sf::st_read("data-raw/ag-b-00.03-875-gg18/ggg_2018-LV95/shp/g1l18.shp") %>%
+  select(CODE_ISO) %>% 
+  st_transform(crs = 2056) %>% 
+  st_buffer(dist = 100)
+
+outline %>%
+  st_transform(crs = 4326) %>%
+  st_write("in_sensitive/outline.shp", delete_dsn = TRUE)
+
+# to get all points
+exclude_geo = st_join(pos_neg_fin_pt, outline, join = st_intersects)
+
+# to get excluded only
+# achtung - takes ~3h on laptop
+exclude_geo = sf::st_difference(pos_neg_fin_pt, outline)
+saveRDS(exclude_geo, "in_sensitive/exclude_geo.rds")
+exclude_geo = readRDS("in_sensitive/exclude_geo.rds")
+rm(pos_neg_fin_pt)
+
+plot(sf::st_geometry(outline))
+plot(sf::st_geometry(exclude_geo), pch = 1, col = "red", add = TRUE)
+
+# Swiss postcode? But somehow point outside? Wrong centroid? 
+# Could be still included as PLZ level only? But centroid would need to be recalculated 
+# or data merged for median SEP for PLZ?
+exclude_geo %>% 
+  sf::st_drop_geometry() %>% 
+  left_join(pos_neg_fin) %>% 
+  frq(plz_pat)
+
+pos_neg_fin %<>%
+  filter(!ID %in% exclude_geo$ID)
+
+#' #### Empty addresses
+#' That simply cannot be geocoded, so not sure why coordinates exist?
+
+pos_neg_fin %>% filter(is.na(canton) & 
+                         is.na(strasse_pat) &
+                         is.na(plz_pat) &
+                         is.na(ort_lang_pat)) %>% 
+  summarise_frq()
+
+pos_neg_fin %<>% mutate(drop = ifelse(is.na(canton) & 
+                                        is.na(strasse_pat) &
+                                        is.na(plz_pat) &
+                                        is.na(ort_lang_pat), 1, 0)) %>% 
+  filter(drop == 0 | is.na(drop)) %>% 
+  select(-drop)
+
+#' #### Only canton
+#' Insufficient for geocoding
+
+pos_neg_fin %>% filter(is.na(strasse_pat) &
+                         is.na(plz_pat) &
+                         is.na(ort_lang_pat)) %>% 
+  summarise_frq()
+
+pos_neg_fin %<>% mutate(drop = ifelse(is.na(strasse_pat) &
+                                        is.na(plz_pat) &
+                                        is.na(ort_lang_pat), 1, 0)) %>% 
+  filter(drop == 0 | is.na(drop)) %>% 
+  select(-drop)
+
+#' #### Both PLZ and town missing
+#' Quality of geocodes simply cannot be good here
+
+pos_neg_fin %>% filter(is.na(plz_pat) &
+                         is.na(ort_lang_pat)) %>% 
+  summarise_frq()
+
+pos_neg_fin %<>% mutate(drop = ifelse(is.na(plz_pat) &
+                                        is.na(ort_lang_pat), 1, 0)) %>% 
+  filter(drop == 0 | is.na(drop)) %>% 
+  select(-drop)
+
+#' ### Living abroad
+
+pos_neg_fin %>% filter(land != "Schweiz") %>% 
+  summarise_frq()
+
+pos_neg_fin %<>% mutate(drop = ifelse(land != "Schweiz", 1, 0)) %>% 
+  filter(drop == 0 | is.na(drop)) %>% 
+  select(-drop)
+
+#' ### No country
+
+pos_neg_fin %>% 
+  filter(is.na(land)) %>% 
+  summarise_frq()
+
+#' ### End
+#' Numbers across cascade
+
+pos_neg_fin %>% summarise_frq()
+
+#' Proportion excluded
+
+(start - nrow(pos_neg_fin)) / start
+
+#' # Describe initial database
+
+pos_neg_fin %>%
+  group_by(age_group) %>%
+  summarise_frq()
+
+pos_neg_fin %>%
   group_by(sex) %>%
   summarise_frq()
 
-pos_neg %>%
-  group_by(month) %>%
+pos_neg_fin %>%
+  group_by(year(date), month) %>%
   summarise_frq()
-
 
 #' # Check geocoding information
 #' 
@@ -223,161 +575,95 @@ pos_neg %>%
 #' records with the street name or with both the postal code and the municipality. We also only
 #' retain records that were actually geocoded (variables X and Y are present).
 
-pos_neg %>%
-  group_by(is.na(strasse_pat)) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(is.na(plz_pat)) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(is.na(ort_lang_pat)) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(is.na(plz_pat) & is.na(ort_lang_pat)) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by((is.na(strasse_pat) & is.na(ort_lang_pat)) | 
-             (is.na(strasse_pat) & is.na(plz_pat))) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(is.na(X)|is.na(Y)) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(geo.status) %>%
-  summarise_frq()
-
-pos_neg = pos_neg %>% 
-  mutate(geo_missing=if_else(is.na(strasse_pat) & is.na(plz_pat),1,0),
-         geo_missing=if_else(is.na(strasse_pat) & is.na(ort_lang_pat),1,geo_missing),         
-         geo_missing=if_else(geo.status %in% c("Fehler bei API Call","kein Resultat","PLZ Fehlt"),1,geo_missing),
-         geo_missing=if_else(is.na(X)|is.na(Y),1,geo_missing))
-
-pos_neg %>%
-  group_by(geo_missing) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(age_group,geo_missing) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(sex,geo_missing) %>%
-  summarise_frq()
-
-pos_neg %>%
-  group_by(month,geo_missing) %>%
-  summarise_frq()
-
-table(pos_neg$geo.status, pos_neg$geo_missing)
-
 #' ## Potentially problematic PLZs
 #' 
-#' Watch out for small n!
+#' **These postocdes are currently in but could go away IMO**
+#' these are non residential postcodes where we shouldnt have patients
+#' ansd they will be problematic when SEP is assigned since no SEP building should be there
 #' - hospitals: 4031, 1011, 4101, 5017, 3010, 8208  
 
-pos_neg %>%
+pos_neg_fin %>%
   filter(plz_pat %in% c(4031, 1011, 4101, 5017, 3010, 8208)) %>%
   summarise_frq()
 
-#' - hospital plus few buildings: 5404  
-#' 
-pos_neg %>%
-  filter(plz_pat %in% c(5404)) %>%
-  summarise_frq()
+#' - should have no pop? Ried-Brig: 3901, Laura: 6549  
 
-#' - generally small pop: 6441, 6068, 7517
-
-pos_neg %>%
-  filter(plz_pat %in% c(6441, 6068, 7517)) %>%
-  summarise_frq()
-
-#' - no pop? Ried-Brig: 3901, Laura: 6549  
-
-pos_neg %>%
+pos_neg_fin %>%
   filter(plz_pat %in% c(3901, 6549)) %>%
   summarise_frq()
 
 #' - Technopark Luzern: 6039  
 
-pos_neg %>%
+pos_neg_fin %>%
   filter(plz_pat %in% c(6039)) %>%
-  summarise_frq()
-
-#' - Jungfraujoch: 3801  
-
-pos_neg %>%
-  filter(plz_pat %in% c(3801)) %>%
   summarise_frq()
 
 #' - Genève Aéroport: 1215  
 
-pos_neg %>%
+pos_neg_fin %>%
   filter(plz_pat %in% c(1215)) %>%
-  summarise_frq()
-
-#' - remote: 6867, 7710  
-
-pos_neg %>%
-  filter(plz_pat %in% c(6867, 7710)) %>%
-  summarise_frq()
-
-#' - Kloster Fahr: 8109  
-
-pos_neg %>%
-  filter(plz_pat %in% c(8109)) %>%
   summarise_frq()
 
 #' - uni: 1015  
 
-pos_neg %>%
+pos_neg_fin %>%
   filter(plz_pat %in% c(1015)) %>%
   summarise_frq()
 
 #' ## Understanding missing geographic information
 #' 
-#' We examine the factors associated with missing or incomplete geographic
-#' information. 
-# 
-# fdr_missing_pos = pos_neg %>%
-#   sample_frac(0.1) %>%
-#   mutate(age_group=relevel(age_group,ref="40-49"),
-#          canton=relevel(factor(canton),ref="ZH")) %>%
-#   glm(geo_missing ~ age_group + sex + canton + test_pos + hospitalisation + death, data=., family = binomial("logit"))
-# 
-# plot_model(fdr_missing_pos) + 
-#   geom_hline(yintercept = 1, color = "grey40") +
-#   scale_y_continuous(limits=c(.3,3))
-# 
-# summary(fdr_missing_pos)$coefficients %>%
-#   as.data.frame() %>%
-#   rownames_to_column() %>%
-#   mutate(OR=exp(Estimate),
-#          OR_lb=exp(Estimate + qnorm(.025)*`Std. Error`),
-#          OR_ub=exp(Estimate + qnorm(.975)*`Std. Error`))
+#' ### We examine the factors associated with incomplete geographic information. 
 
+pos_neg_fin %>%
+  group_by((is.na(strasse_pat) & is.na(ort_lang_pat)) | 
+             (is.na(strasse_pat) & is.na(plz_pat))) %>%
+  summarise_frq()
 
-#' ## Understanding *partially* missing geographic information
-#' 
-#' We examine the factors associated with having only PLZ precision 
+pos_neg_fin %>%
+  group_by(geo.status) %>%
+  summarise_frq()
 
-fdr_plz_only = pos_neg %>%
+pos_neg_fin %<>% 
+  mutate(geo_missing=if_else(is.na(strasse_pat) & is.na(plz_pat),1,0),
+         geo_missing=if_else(is.na(strasse_pat) & is.na(ort_lang_pat),1,geo_missing)#,         
+         # geo_missing=if_else(geo.status %in% c("Fehler bei API Call","kein Resultat","PLZ Fehlt"),1,geo_missing),
+         # geo_missing=if_else(is.na(X)|is.na(Y),1,geo_missing)
+  )
+
+pos_neg_fin %>%
+  group_by(geo_missing) %>%
+  summarise_frq()
+
+pos_neg_fin %>%
+  group_by(age_group,geo_missing) %>%
+  summarise_frq()
+
+pos_neg_fin %>%
+  group_by(sex,geo_missing) %>%
+  summarise_frq()
+
+pos_neg_fin %>%
+  group_by(month,geo_missing) %>%
+  summarise_frq()
+
+pos_neg_fin %>%
+  group_by(canton,geo_missing) %>%
+  summarise_frq()
+
+saveRDS(pos_neg_fin,"in_sensitive/pos_neg_fin_missingness.rds")
+
+fdr_missing_pos = pos_neg_fin %>%
   sample_frac(0.1) %>%
-  mutate(plz_only = if_else(is.na(strasse_pat) & (!is.na(plz_pat) | !is.na(ort_lang_pat)),1,0)) %>% 
   mutate(age_group=relevel(age_group,ref="40-49"),
          canton=relevel(factor(canton),ref="ZH")) %>%
-  glm(plz_only ~ age_group + sex + canton + test_pos + hospitalisation + death, data=., family = binomial("logit"))
+  # glm(geo_missing ~ age_group + sex + canton + test_pos + hospitalisation + death, data=., family = binomial("logit"))
+  glm(geo_missing ~ age_group + sex + canton + test_pos , data=., family = binomial("logit"))
 
-plot_model(fdr_plz_only) + 
+plot_model(fdr_missing_pos) +
   geom_hline(yintercept = 1, color = "grey40") +
   scale_y_continuous(limits=c(.3,3))
 
-summary(fdr_plz_only)$coefficients %>%
+summary(fdr_missing_pos)$coefficients %>%
   as.data.frame() %>%
   rownames_to_column() %>%
   mutate(OR=exp(Estimate),
@@ -386,818 +672,116 @@ summary(fdr_plz_only)$coefficients %>%
 
 #' # Get SEP
 
-posneg_geo = filter(pos_neg,geo_missing==0)
-posneg_tmp =  filter(pos_neg,geo_missing==1)
-
-posneg_geo = posneg_geo %>% 
+pos_neg_fin %<>% 
   st_as_sf(coords = c("X", "Y"), remove = FALSE, crs = 4326, agr = "identity") %>% 
   st_transform(crs = 2056)
 
-sep1 = readRDS("../data-raw/Swiss-SEP1/ssep_user_geo.Rds") %>% 
+sep1 = readRDS("data-raw/Swiss-SEP1/ssep_user_geo.Rds") %>% 
+  dplyr::select(-gwr_x00,-gwr_y00) %>% 
   st_transform(crs = 2056)
 
-posneg_geo_sep1 = st_join(posneg_geo, sep1, join = st_nearest_feature)
+posneg_geo_sep1 = sf::st_join(pos_neg_fin, sep1, join = st_nearest_feature)
+rm(pos_neg_fin); gc()
 
-posneg_geo_all = posneg_geo_sep1 %>%
-  as.data.frame() %>%
-  bind_rows(posneg_tmp) %>%
-  as_tibble()
+#' ## Crude counts
+
+posneg_geo_sep1 %>% 
+  sf::st_drop_geometry() %>% 
+  group_by(ssep_d) %>% 
+  summarise_frq()
 
 #' ## Check max dist
 
 # takes some time
-# nearest <- st_nearest_feature(posneg_geo, sep1)
-# posneg_geo$dist1 <- st_distance(posneg_geo, sep1[nearest, ], by_element = TRUE)
-# rm(nearest)
-# gc()
-# summary(posneg_geo$dist1)
+nearest <- st_nearest_feature(posneg_geo_sep1, sep1)
+posneg_geo_sep1$dist1 <- sf::st_distance(posneg_geo_sep1, sep1[nearest, ], by_element = TRUE)
+rm(nearest, sep1); gc()
+summary(posneg_geo_sep1$dist1)
 
+# temp <- posneg_geo_sep1 %>% 
+#   arrange(desc(dist1)) %>% 
+#   slice(1:10)
 
 #' # Get SOMED
 
-bag_addresses_clean_geo = read_rds("../data-raw/bag_addresses_clean_geo.Rds")
+bag_addresses_clean_geo = read_rds("data-raw/bag_addresses_clean_geo.Rds")
 
-posneg_geo_sep1_somed = st_join(posneg_geo_sep1, bag_addresses_clean_geo, join = st_nearest_feature)
+posneg_geo_sep1_somed = sf::st_join(posneg_geo_sep1, bag_addresses_clean_geo, join = st_nearest_feature)
+rm(posneg_geo_sep1); gc()
 
 # takes some time
-nearest = st_nearest_feature(posneg_geo_sep1_somed, bag_addresses_clean_geo)
-posneg_geo_sep1_somed$dist_somed = st_distance(posneg_geo_sep1_somed, bag_addresses_clean_geo[nearest, ], by_element = TRUE)
-rm(nearest)
-gc()
+nearest = sf::st_nearest_feature(posneg_geo_sep1_somed, bag_addresses_clean_geo)
+posneg_geo_sep1_somed$dist_somed = sf::st_distance(posneg_geo_sep1_somed, bag_addresses_clean_geo[nearest, ], by_element = TRUE)
+rm(nearest, bag_addresses_clean_geo); gc()
 summary(posneg_geo_sep1_somed$dist_somed)
 
+# temp <- posneg_geo_sep1_somed %>%
+#   arrange(desc(dist_somed)) %>%
+#   slice(1:100)
+
 # distance selection here
-posneg_geo_sep1_somed$excl_somed = ifelse(as.numeric(posneg_geo_sep1_somed$dist_somed) < 25, 1, 0)
-saveRDS(posneg_geo_sep1_somed,file=paste0("../in_sensitive/posneg_geo_sep1_somed_",Sys.Date(),".rds"))
+posneg_geo_sep1_somed$excl_somed25 = ifelse(as.numeric(posneg_geo_sep1_somed$dist_somed) < 25, 1, 0)
+posneg_geo_sep1_somed$excl_somed50 = ifelse(as.numeric(posneg_geo_sep1_somed$dist_somed) < 50, 1, 0)
 
-posneg_geo_nonursing = posneg_geo_sep1_somed %>%
-  filter(excl_somed==0) %>%
-  as.data.frame() %>%
-  bind_rows(posneg_tmp) %>%
-  as_tibble() 
+saveRDS(posneg_geo_sep1_somed,file=paste0("in_sensitive/posneg_geo_sep1_somed_",Sys.Date(),".rds"))
+# posneg_geo_sep1_somed = readRDS(paste0("in_sensitive/posneg_geo_sep1_somed_",Sys.Date(),".rds"))
 
-posneg_geo_sep1_somed %>%
-  as.data.frame() %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=month) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  filter(!is.na(ssep_d)) %>%
-  group_by(excl_somed) %>%
-  summarise_frq()
 
-posneg_geo_nonursing = posneg_geo_sep1_somed %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=month) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  filter(!is.na(ssep_d)) %>%
-  filter(excl_somed==0) %>%
-  as.data.frame() %>%
-  bind_rows(posneg_tmp) %>%
-  as_tibble() 
 
-#' # Get demoraphic data
+
+#' ## Keep only relevant variables
 #' 
-date_start = as.Date("2020-03-01")
-date_end = final_date
-date_negtest = as.Date("2020-05-23")
 
-r18_pop_plz_sep1 = readRDS("../data-raw/r18_pop_plz_sep1.rds") %>%
-  transmute(
-    canton=canton,
-    plz_pat=as.character(PLZ),
-    sex=sex,
-    age_group=as.character(age_group),
-    ssep_d=as.integer(as.character(factor(ssep1_d,labels=as.character(1:10)))),
-    n_pop=n
-  )
-r18_to_merge = NULL
-for(i in 3:10) {
-  r18_to_merge = bind_rows(r18_to_merge,mutate(r18_pop_plz_sep1,month=i))
-}
+posneg_geo_all = posneg_geo_sep1_somed %>%
+  st_drop_geometry() %>%
+  mutate(geo.software=if_else(geo.status %in% c("OK","mehrere Resultate, nehme id=1"),"swisstopo","other"),
+         period=if_else(date<date_period,0,1)) %>%
+  dplyr::select(ID,date,month,period,
+                canton,age_group,sex,ssep_d,
+                test,test_pos,hospitalisation,icu,death,
+                test_date=test_dt,hospitalisation_date,death_date=death_dt,
+                geo_origins,geo.status,geo.software,
+                excl_somed25,excl_somed50,dist_somed) 
 
-#' # Full description of data (for table 1 and table s1)
+saveRDS(posneg_geo_all,file=paste0("in_sensitive/posneg_geo_all_",Sys.Date(),".rds"))
+# posneg_geo_all = readRDS(paste0("in_sensitive/posneg_geo_all_",Sys.Date(),".rds"))
+
+
+
+#' ## Crude counts
 #' 
-#' ## Full data
 
-
-tmp = posneg_geo_all %>%
-  filter(date>=date_negtest,date<=date_end) %>%
-  summarise_frq()
 posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  summarise_frq() %>%
-  mutate(n_test=tmp$n_test)
-
-
-#' 
-#' ## Included data
-#' 
-#' ### All included
-#' 
-
-
-tmp = posneg_geo_all %>%
-  filter(date>=date_negtest,date<=date_end) %>%
-  mutate(inc=if_else(!is.na(age_group) & !is.na(sex) & !is.na(ssep_d),1,0)) %>%
-  group_by(inc) %>%
   summarise_frq()
+
 posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(inc=if_else(!is.na(age_group) & !is.na(sex) & !is.na(ssep_d),1,0)) %>%
-  group_by(inc) %>%
-  summarise_frq() %>%
-  mutate(n_test=tmp$n_test)
+  group_by(age_group) %>%
+  summarise_frq()
 
+posneg_geo_all %>%
+  group_by(sex) %>%
+  summarise_frq()
 
-#' 
-#' ### By mode of geocoding
-#' 
-tmp = posneg_geo_all %>%
-  filter(date>=date_negtest,date<=date_end) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  filter(!is.na(age_group),!is.na(sex)) %>%
-  filter(!is.na(ssep_d)) %>%
+posneg_geo_all %>%
+  group_by(ssep_d) %>%
+  summarise_frq()
+
+posneg_geo_all %>%
+  group_by(excl_somed25) %>%
+  summarise_frq()
+
+posneg_geo_all %>%
+  group_by(excl_somed50) %>%
+  summarise_frq()
+
+posneg_geo_all %>%
+  group_by(geo.status) %>%
+  summarise_frq()
+
+posneg_geo_all %>%
   group_by(geo_origins) %>%
   summarise_frq()
+
 posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  filter(!is.na(age_group),!is.na(sex)) %>%
-  filter(!is.na(ssep_d)) %>%
-  group_by(geo_origins) %>%
-  summarise_frq() %>%
-  mutate(n_test=tmp$n_test)
-
-#' 
-#' ### Attributed to nursing homes
-#' 
-
-tmp = posneg_geo_sep1_somed %>%
-  as.data.frame() %>%
-  filter(date>=date_negtest,date<=date_end) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  filter(!is.na(age_group),!is.na(sex)) %>%
-  filter(!is.na(ssep_d)) %>%
-  group_by(excl_somed) %>%
+  group_by(geo.software) %>%
   summarise_frq()
-posneg_geo_sep1_somed %>%
-  as.data.frame() %>%
-  filter(date>=date_start,date<=date_end) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  filter(!is.na(age_group),!is.na(sex)) %>%
-  filter(!is.na(ssep_d)) %>%
-  group_by(excl_somed) %>%
-  summarise_frq()%>%
-  mutate(n_test=tmp$n_test)
-
-#' # Get correspondence table between SEP and ID to put back into the routine
-#
-# posneg_geo_all %>%
-#   left_join(posneg_geo_sep1) %>%
-#   saveRDS(.,file=paste0("../in_sensitive/posneg_geo_all",Sys.Date(),".rds"))
-# falldetail_sep = posneg_geo_all %>%
-#   as.data.frame()  %>%
-#   filter(test_pos==1) %>%
-#   select(fall_guid,ssep3_d)
-# saveRDS(falldetail_sep,file=paste0("../in_sensitive/falldetail_sep_",Sys.Date(),".rds"))
-#
-# negtests_sep = posneg_geo_all %>%
-#   as.data.frame()  %>%
-#   filter(test_pos==0) %>%
-#   select(labor_test_negativ,ssep3_d)
-# saveRDS(negtests_sep,file=paste0("../in_sensitive/neg_tests_sep_",Sys.Date(),".rds"))
-
-
-
-#' # Merge and format stratified data
-#'
-#' ## Start with numbers by month (except for tests from May 23rd)
-
-
-date_start = as.Date("2020-03-01")
-date_end = final_date
-date_negtest = as.Date("2020-05-23")
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=month) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_month_",Sys.Date(),".rds"))
-
-
-# By week
-
-date_start = as.Date("2020-03-01")
-date_end = final_date
-date_negtest = as.Date("2020-05-23")
-
-strat_covid_sep = posneg_geo_all %>%
-  mutate(period=format(date,"%Y-%U")) %>%
-  filter(date>=date_start,date<=date_end) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  group_by(period) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_week_",Sys.Date(),".rds"))
-
-
-#' ## Start everything at May 23rd
-
-
-date_start = as.Date("2020-05-23")
-date_end = final_date
-date_negtest = as.Date("2020-05-23")
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=month) %>%
-  filter(!(test_pos==0 & date<date_negtest)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_month_test23may_",Sys.Date(),".rds"))
-
-
-
-
-#' ## Consider two waves (after June 8th)
-#'
-
-date_start = as.Date("2020-03-01")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid) 
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period8june_",Sys.Date(),".rds"))
-
-
-
-
-
-#' ## Limit to after may 23 to include testing
-#'
-
-date_start = as.Date("2020-05-23")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period8june_test23may_",Sys.Date(),".rds"))
-
-
-
-#' ## Consider two waves separately (after June 8th)
-#'
-
-date_start = as.Date("2020-03-01")
-date_end = as.Date("2020-06-08")
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<date_end) %>%
-  mutate(period=0) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep_0 =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep_0,file=paste0("../shareable/strat_covid_sep_strat8june0_",Sys.Date(),".rds"))
-
-date_start = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=1) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep_1 =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-
-
-saveRDS(strat_covid_sep_1,file=paste0("../shareable/strat_covid_sep_strat8june1_",Sys.Date(),".rds"))
-
-
-#' ## Consider two waves separately and include testing from 23 may
-#'
-
-date_start = as.Date("2020-05-23")
-date_end = as.Date("2020-06-08")
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<date_end) %>%
-  mutate(period=0) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep_0 =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep_0,file=paste0("../shareable/strat_covid_sep_strat8june0_test23may_",Sys.Date(),".rds"))
-
-date_start = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=1) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep_1 =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-
-
-saveRDS(strat_covid_sep_1,file=paste0("../shareable/strat_covid_sep_strat8june1_test23may_",Sys.Date(),".rds"))
-
-
-
-#' ## Consider change in testing criteria (only at risk before April 22nd)
-#
-
-date_start = as.Date("2020-03-01")
-date_period = as.Date("2020-04-22")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period22apr_",Sys.Date(),".rds"))
-
-
-#' ## Consider change in testing price (free after June 26)
-#
-
-date_start = as.Date("2020-03-01")
-date_period = as.Date("2020-06-26")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period26june_",Sys.Date(),".rds"))
-
-
-
-
-
-#' ## Limit to after may 23 to include testing
-#'
-
-date_start = as.Date("2020-05-23")
-date_period = as.Date("2020-06-26")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period26june_test23may_",Sys.Date(),".rds"))
-
-
-
-
-#' ## Consider until second wave (free after September 1)
-#
-
-date_start = as.Date("2020-03-01")
-date_period = as.Date("2020-09-01")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period1sept_",Sys.Date(),".rds"))
-
-
-
-
-
-#' ## Limit to after may 23 to include testing
-#'
-
-date_start = as.Date("2020-05-23")
-date_period = as.Date("2020-09-01")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period1sept_test23may_",Sys.Date(),".rds"))
-
-
-
-#' ## Consider two waves (after June 8th), remove geocoding based on PLZ only
-#'
-
-date_start = as.Date("2020-03-01")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(geo_origins=="address") %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_noPLZ_sep_period8june_",Sys.Date(),".rds"))
-
-
-date_start = as.Date("2020-05-23")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-
-n_tchid = posneg_geo_all %>%
-  filter(geo_origins=="address") %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_noPLZ_sep_period8june_test23may_",Sys.Date(),".rds"))
-
-
-
-#' ## Consider two waves (after June 8th), remove geocoding that was not immediately straightforward
-#'
-
-date_start = as.Date("2020-03-01")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(geo.status=="OK") %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_straightgeo_sep_period8june_",Sys.Date(),".rds"))
-
-
-date_start = as.Date("2020-05-23")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_all %>%
-  filter(geo.status=="OK") %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_straightgeo_sep_period8june_test23may_",Sys.Date(),".rds"))
-
-
-
-
-#' ## Exclude nursing homes
-#'
-
-date_start = as.Date("2020-03-01")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_nonursing %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period8june_nonursing_",Sys.Date(),".rds"))
-
-
-
-
-
-#' ## Limit to after may 23 to include testing
-#'
-
-date_start = as.Date("2020-05-23")
-date_period = as.Date("2020-06-08")
-date_end = final_date
-
-n_tchid = posneg_geo_nonursing %>%
-  filter(date>=date_start,date<=date_end) %>%
-  mutate(period=if_else(date<date_period,0,1)) %>%
-  group_by(canton,period,sex,age_group,ssep_d) %>%
-  summarise(n_test=n(),
-            n_pos=sum(test_pos),
-            n_hospit=sum(hospitalisation),
-            n_icu=sum(icu),
-            n_death=sum(death))
-
-n_pop = r18_pop_plz_sep1 %>%
-  group_by(canton,sex,age_group,ssep_d) %>%
-  summarise(n_pop=sum(n_pop))
-
-strat_covid_sep =
-  expand_grid(canton=unique(n_tchid$canton),
-              period=unique(n_tchid$period),
-              sex=unique(n_tchid$sex),
-              age_group=unique(n_tchid$age_group),
-              ssep_d=1:10) %>%
-  left_join(n_pop) %>%
-  left_join(n_tchid)
-saveRDS(strat_covid_sep,file=paste0("../shareable/strat_covid_sep_period8june_test23may_nonursing_",Sys.Date(),".rds"))
