@@ -29,15 +29,6 @@ firr3 = function(x,y,z) paste0(sprintf("%.3f",x)," (",sprintf("%.3f",y),"-",spri
 fperc = function(x,y) paste0(" (",sprintf("%.1f",100*as.numeric(x)/as.numeric(y)),"%)")
 fonetoten = function(x,y,z) paste0(sprintf("%.2f",exp(log(x)*9))," (",sprintf("%.2f",exp(log(y)*9)),"-",sprintf("%.2f",exp(log(z)*9)),")")
 
-
-# on cluster >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
-# system("scp data-raw/foph_stratified_data/* UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/data-raw/foph_stratified_data/")
-# system("scp analyses/run_models.R UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/")
-# system("scp analyses/sb_runmodels.sh UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/")
-# system("scp analyses/sb_formatmodels.sh UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/")
-# system("scp analyses/format_model_output.r UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/analyses/")
-# system("scp R/* UBELIX:/gpfs/homefs/ispm/jr18s506/projects/ISPM_COVID-SEP/R/.")
-
 # appearance
 cascade_outcomes = c("n_test","n_pos","n_hospit","n_icu","n_death")
 cascade_outcomes_names = c("Total tests", "Positive tests", "Hospitalisations", "ICU admissions", "Deaths")
@@ -83,7 +74,7 @@ for(i in 1:length(data_files)) {
              n_pos=tidyr::replace_na(n_pos,0),
              n_hospit=tidyr::replace_na(n_hospit,0),
              n_icu=tidyr::replace_na(n_icu,0),
-             n_death=tidyr::replace_na(n_death,0)) %>%
+             n_death=tidyr::replace_na(n_death,0)) %>%Removed paths
       filter(!is.na(age_group),!is.na(sex))
     assign(data_files[i],x)
     cat(path1,"\n")
