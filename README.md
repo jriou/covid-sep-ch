@@ -8,7 +8,7 @@ Observations:
 
 * This code is not meant to be run directly (as the data cannot provided by default), but rather to better explain the approach and facilitate its adaptation to other contexts and datasets.
 
-* We use `R` version `version 4.X.X` code and rely mainly on the following packages: `tidyverse`, `rstanarm` and `sf`.
+* We use `R` version `version 4.0.0` code and rely mainly on the following packages: `tidyverse 1.3.0`, `rstanarm 2.21.1` and `sf 1.0.0`.
 
 * Extraction, management and formatting of the individual level data available at the Swiss Federal Office of Public health (FOPH) is done in `analyses/` folder using the R files with names starting with `FOPH-`. The objectives of these scripts are to 
 1) apply exclusion criteria; 
