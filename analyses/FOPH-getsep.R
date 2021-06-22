@@ -35,11 +35,11 @@ filter_bad_dates = function(x,lim1="2020-02-01",lim2=date_end) if_else(x<as.Date
 
 summarise_frq = function(x) {
   x %>%
-    summarise(n_test=sum(test,na.rm=TRUE),  # only takes into account tests from 23 may 2020
+    summarise(n_test=sum(test, na.rm=TRUE),  # only takes into account tests from 23 may 2020
               n_pos=sum(test_pos, na.rm = TRUE),
-              n_hospit=sum(hospitalisation),
-              n_icu=sum(icu),
-              n_death=sum(death)) %>%
+              n_hospit=sum(hospitalisation, na.rm=TRUE),
+              n_icu=sum(icu, na.rm=TRUE),
+              n_death=sum(death, na.rm=TRUE)) %>%
     mutate(n_test=paste0(n_test," (",round(100*n_test/sum(n_test),1),"%)"),
            n_pos=paste0(n_pos," (",round(100*n_pos/sum(n_pos),1),"%)"),
            n_hospit=paste0(n_hospit," (",round(100*n_hospit/sum(n_hospit),1),"%)"),
@@ -185,6 +185,8 @@ mis_canton <- neg %>%
   st_as_sf(coords = c("X", "Y"), remove = TRUE, crs = 4326, agr = "identity") %>%
   st_transform(crs = 2056) 
 
+# data openly available at
+# https://www.swisstopo.admin.ch/de/geodata/landscape/boundaries3d.html
 canton_2020_01 <- read_rds("data-raw/swissBOUNDARIES3D/canton_2020_01.Rds") %>% 
   select(-KT_TEIL)
 
@@ -422,8 +424,8 @@ pos_neg_fin %>%
   st_write("in_sensitive/pos_neg_fin.gpkg", delete_dsn = TRUE)
 
 #' #### Google results
-#' !!! These are results with swisstopo results `Fehler bei API Call` or `kein Resultat`
-#' but they contain coordinates; they must come from somewhere else
+#' These are results with swisstopo results `Fehler bei API Call` or `kein Resultat`
+#' but containing coordinates; they must come from somewhere else
 
 frq(pos_neg_fin$geo.status)
 
@@ -440,7 +442,7 @@ pos_neg_fin %>%
 
 saveRDS(pos_neg_fin, "in_sensitive/pos_neg_fin.rds")
 
-# # comment out to use full results including Google
+# # comment out to use partial results excluding Google
 # pos_neg_fin %<>%
 #   filter(geo.status == "OK" | geo.status == "mehrere Resultate, nehme id=1")
 
@@ -456,6 +458,8 @@ pos_neg_fin_pt =  pos_neg_fin %>%
 #   sample_n(100000)
 
 # with 100m buffer to capture border addresses better
+# country outline 2018 edition openly available from BfS
+# `Generalisierte Gemeindegrenzen: Geodaten`
 outline = sf::st_read("data-raw/ag-b-00.03-875-gg18/ggg_2018-LV95/shp/g1l18.shp") %>%
   select(CODE_ISO) %>% 
   st_transform(crs = 2056) %>% 
@@ -703,6 +707,9 @@ summary(posneg_geo_sep1$dist1)
 #   slice(1:10)
 
 #' # Get SOMED
+
+#' Using geocoded [BAG data](https://www.bag.admin.ch/bag/de/home/zahlen-und-statistiken/zahlen-fakten-zu-pflegeheimen/kennzahlen.html) on 
+#' [Kennzahlen der Schweizer Pflegeheime 2018 Flat File (Excel, deutsch, 1MB)](https://somed.bagapps.ch/data/download/archiv/2018_Flat_File_de.xlsx?v=1616748312).
 
 bag_addresses_clean_geo = read_rds("data-raw/bag_addresses_clean_geo.Rds")
 
