@@ -322,8 +322,6 @@ pos_neg %<>%
   mutate(ID = row_number()) %>%
   relocate(ID)
 
-saveRDS(pos_neg, "in_sensitive/pos_neg.rds")
-
 #' ## Exclusions 
 #' 
 #' ### Start
@@ -413,16 +411,6 @@ pos_neg_fin %<>%
   filter(!is.na(X)) %>% 
   filter(!is.na(Y)) 
 
-pos_neg_fin %>% 
-  dplyr::select(ID, X, Y) %>%
-  write_csv("in_sensitive/pos_neg_fin.csv")
-
-pos_neg_fin %>% 
-  dplyr::select(ID, X, Y) %>%
-  st_as_sf(coords = c("X", "Y"), remove = FALSE, crs = 4326, agr = "identity") %>%
-  st_transform(crs = 2056) %>% 
-  st_write("in_sensitive/pos_neg_fin.gpkg", delete_dsn = TRUE)
-
 #' #### Google results
 #' These are results with swisstopo results `Fehler bei API Call` or `kein Resultat`
 #' but containing coordinates; they must come from somewhere else
@@ -439,8 +427,6 @@ pos_neg_fin %>%
 pos_neg_fin %>% 
   filter(geo.status == "OK" | geo.status == "mehrere Resultate, nehme id=1") %>% 
   summarise_frq()
-
-saveRDS(pos_neg_fin, "in_sensitive/pos_neg_fin.rds")
 
 # # comment out to use partial results excluding Google
 # pos_neg_fin %<>%
@@ -465,18 +451,12 @@ outline = sf::st_read("data-raw/ag-b-00.03-875-gg18/ggg_2018-LV95/shp/g1l18.shp"
   st_transform(crs = 2056) %>% 
   st_buffer(dist = 100)
 
-outline %>%
-  st_transform(crs = 4326) %>%
-  st_write("in_sensitive/outline.shp", delete_dsn = TRUE)
-
 # to get all points
 exclude_geo = st_join(pos_neg_fin_pt, outline, join = st_intersects)
 
 # to get excluded only
 # achtung - takes ~3h on laptop
 exclude_geo = sf::st_difference(pos_neg_fin_pt, outline)
-saveRDS(exclude_geo, "in_sensitive/exclude_geo.rds")
-exclude_geo = readRDS("in_sensitive/exclude_geo.rds")
 rm(pos_neg_fin_pt)
 
 plot(sf::st_geometry(outline))
@@ -654,8 +634,6 @@ pos_neg_fin %>%
   group_by(canton,geo_missing) %>%
   summarise_frq()
 
-saveRDS(pos_neg_fin,"in_sensitive/pos_neg_fin_missingness.rds")
-
 fdr_missing_pos = pos_neg_fin %>%
   sample_frac(0.1) %>%
   mutate(age_group=relevel(age_group,ref="40-49"),
@@ -730,9 +708,6 @@ summary(posneg_geo_sep1_somed$dist_somed)
 posneg_geo_sep1_somed$excl_somed25 = ifelse(as.numeric(posneg_geo_sep1_somed$dist_somed) < 25, 1, 0)
 posneg_geo_sep1_somed$excl_somed50 = ifelse(as.numeric(posneg_geo_sep1_somed$dist_somed) < 50, 1, 0)
 
-saveRDS(posneg_geo_sep1_somed,file=paste0("in_sensitive/posneg_geo_sep1_somed_",Sys.Date(),".rds"))
-# posneg_geo_sep1_somed = readRDS(paste0("in_sensitive/posneg_geo_sep1_somed_",Sys.Date(),".rds"))
-
 
 
 
@@ -750,8 +725,6 @@ posneg_geo_all = posneg_geo_sep1_somed %>%
                 geo_origins,geo.status,geo.software,
                 excl_somed25,excl_somed50,dist_somed) 
 
-saveRDS(posneg_geo_all,file=paste0("in_sensitive/posneg_geo_all_",Sys.Date(),".rds"))
-# posneg_geo_all = readRDS(paste0("in_sensitive/posneg_geo_all_",Sys.Date(),".rds"))
 
 
 
