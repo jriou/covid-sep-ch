@@ -2,7 +2,8 @@
 
 Code and supplementary material to the article 
 
-Riou J., Panczak R., Althaus C.L., Junker C., Perisa D., Schneider K., Criscuolo N.G., Low N., Egger M. "Socioeconomic position and the cascade from SARS-CoV-2 testing to COVID-19 mortality: a population-based analysis of Swiss surveillance data", *Lancet Public Health* (accepted).
+Riou J., Panczak R., Althaus C.L., Junker C., Perisa D., Schneider K., Criscuolo N.G., Low N., Egger M. 2021 "Socioeconomic position and the cascade from SARS-CoV-2 testing to COVID-19 mortality: a population-based analysis of Swiss surveillance data", *Lancet Public Health* 6(9):e683-e691. doi:[10.1016/S2468-2667(21)00160-2](https://doi.org/10.1016/S2468-2667(21)00160-2)
+.
 
 Observations:
 
